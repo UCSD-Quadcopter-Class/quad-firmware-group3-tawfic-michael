@@ -1,4 +1,4 @@
-#include <radio.h>
+#include "radio.h"
 #include "serLCD.h"
 #include "quad_remote.h"
 
@@ -21,36 +21,84 @@ void setup() {
   pinMode(PIN_BTN2, INPUT);
 
   Serial.begin(9600);
-//  rf.begin(13);
+  Serial1.begin(115200);
+  rfBegin(13);
+  Serial.println("Initilizing...");
   while(!Serial);
-  Serial.print("Ready.\n");
+  Serial.println("Ready.");
   lcd.clear();
   lcd.home();
 }
 
-char *labels[4] = {"T", "Y", "P", "R"};
-char pins[4] = {PIN_THROTTLE, PIN_YAW, PIN_PITCH, PIN_ROLL};
+int pin[4];
+int temp;
 
 void loop() {
-  char buf[2];
   lcd.setCursor(0,0);
   lcd.print("T:");
   lcd.setCursor(0,2);
-  lcd.print(analogRead(PIN_THROTTLE));
-  lcd.setCursor(0,10);
-  lcd.print("R:");
-  lcd.setCursor(0,12);
-  lcd.print(analogRead(PIN_ROLL));
-  lcd.setCursor(1,0);
-  lcd.print("Y:");
-  lcd.setCursor(1,2);
-  lcd.print(analogRead(PIN_YAW));
-  lcd.setCursor(1,10);
-  lcd.print("P:");
-  lcd.setCursor(1,12);
-  lcd.print(analogRead(PIN_PITCH));
-  delay(1000);
-  lcd.clear();
+  noInterrupts();
+  temp = analogRead(PIN_THROTTLE);
+  if (temp <= 215) { //bottom 
+    temp = 215;
+  }
+  if (temp >= 1023) { //top 
+    temp = 1023;
+  }
+  pin[0] = map(temp, 215, 1023, 0, 255);
+  lcd.print(pin[0]);
+  rfWrite(lowByte(pin[0]));
+  interrupts();
+
+
+//  lcd.setCursor(0,10);
+//  lcd.print("R:");
+//  lcd.setCursor(0,12);
+//  temp = analogRead(PIN_ROLL);
+//  if (temp <= 295) { //left
+//    temp = 295;
+//  }
+//  if (temp >= 1023) { //right
+//    temp = 1023;
+//  }
+//  pin[1] = map(temp, 1023, 295, 0, 255);
+//  lcd.print(pin[1]);
+//  rfWrite(lowByte(pin[1]));
+//
+//  
+//  lcd.setCursor(1,0);
+//  lcd.print("Y:");
+//  lcd.setCursor(1,2);
+//  temp = analogRead(PIN_YAW);
+//  if (temp <= 234) { //right 
+//    temp = 234;
+//  }
+//  if (temp >= 1023) { //left
+//    temp = 1023;
+//  }
+//  pin[2] = map(temp, 234, 1023, 0, 255);
+//  lcd.print(pin[2]);
+//  rfWrite(lowByte(pin[2]));
+//
+//
+//
+//  
+//  lcd.setCursor(1,10);
+//  lcd.print("P:");
+//  lcd.setCursor(1,12);
+//  temp = analogRead(PIN_PITCH);
+//  if (temp <= 1023) { //down
+//    temp = 1023;
+//  }
+//  if (temp >= 270) { //up
+//    temp = 270;
+//  }
+//  pin[3] = map(temp, 1023, 270, 0, 255);
+//  lcd.print(pin[3]);
+//  rfWrite(lowByte(pin[3]));
+ 
   delay(500);
+  lcd.clear();
+  
   
 }
