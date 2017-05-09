@@ -53,6 +53,7 @@
 #define MAGTYPE                           (true)
 #define XGTYPE                            (false)
 
+
 /* Forward reference required for function pointers below. */
 class Adafruit_LSM9DS1;
 

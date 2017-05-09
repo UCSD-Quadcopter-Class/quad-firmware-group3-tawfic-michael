@@ -33,7 +33,7 @@ void loop(void)
     Serial.print(F(" "));
     Serial.print(orientation.pitch);
     Serial.print(F(" "));
-    Serial.print(orientation.heading);
+    Serial.print(orientation.heading); //yaw
     Serial.println(F(""));
   }
   

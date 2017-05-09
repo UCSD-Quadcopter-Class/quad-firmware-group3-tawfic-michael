@@ -14,7 +14,7 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 #define LSM9DS1_MCS 5
 
 //Global Variables declarations
-struct send_values {
+volatile struct send_values {
   int magic;
   int yaw;
   int throttle;
@@ -41,19 +41,26 @@ struct send_values {
  *           b   a
  */   
  
-int motor_a, motor_b, motor_c, motor_d;
-float roll_PID, pitch_PID, yaw_PID;
-float roll_error, pitch_error, yaw_error;
-sensors_vec_t orientation;
+volatile int motor_a, motor_b, motor_c, motor_d;
+volatile float roll_PID, pitch_PID, yaw_PID;
+volatile float roll_error[15], pitch_error[15], yaw_error[15] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+volatile sensors_vec_t orientation;
+volatile float roll_sensor, pitch_sensor, yaw_sensor;
 
-Adafruit_Simple_AHRS ahrs(&lsm.getAccel(), &lsm.getMag());
+volatile Adafruit_Simple_AHRS ahrs(&lsm.getAccel(), &lsm.getMag());
+volatile int counter = 0;
+volatile float k_p, k_d;
+volatile float k_i = .5;
+volatile unsigned long delta_t_prev_roll, delta_t_prev_pitch, delta_t_prev_yaw = 0;
 
 
+
+//functions
 void setup() {
-  pinMode(8, OUTPUT);
-  pinMode(3, OUTPUT);
-  pinMode(4, OUTPUT);
-  pinMode(5, OUTPUT);
+  pinMode(MA, OUTPUT);
+  pinMode(MB, OUTPUT);
+  pinMode(MC, OUTPUT);
+  pinMode(MD, OUTPUT);
 
   Serial.begin(115200);
   rfBegin(13);
@@ -62,13 +69,53 @@ void setup() {
   while (!Serial);
   setupSensor();
   Serial.println("Ready.");
+  /*
+   * if(magic !+ #)
+   *    while(1);
+   */
 }
 
 void loop() {
   read_values();
+  read_rpy_sensors();
+  PID();
   set_values();
-  lmu_display_values();
-  //PID();
+  graphing();
+  //lmu_display_values(); //used for debugging purposes
+}
+
+void setupSensor()
+{
+  lsm.begin();
+  delay(250);
+  // Try to initialise and warn if we couldn't detect the chip
+  if (!lsm.begin())
+  {
+    Serial.println("Oops ... unable to initialize the LSM9DS1. Check your wiring!");
+    while (1);
+  }
+  
+  // 1.) Set the accelerometer range
+  lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_2G);
+
+  // 2.) Set the magnetometer sensitivity
+  lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
+
+  // 3.) Setup the gyroscope
+  lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_245DPS);
+}
+
+void read_values() {
+  rfRead((uint8_t*) (&values), sizeof(struct send_values));
+}
+
+void read_rpy_sensors() {
+  if (ahrs.getOrientation(&orientation)) {
+    /* 'orientation' should have valid .roll and .pitch fields */
+    roll_sensor = orientation.roll*.001; //1 deg/s == .001 deg/ms
+    pitch_sensor = orientation.pitch*.001;
+    yaw_sensor = orientation.heading*.001;
+  }
 }
 
 void PID() {
@@ -82,16 +129,162 @@ void PID() {
   motor_d = values.throttle - pitch_PID + yaw_PID;
 }
 
-int roll_calculation() {
+float roll_calculation() {
+  float roll_sensor_temp;
+  float first, second, third, total;
+
+  unsigned long delta_t = millis() - delta_t_prev_roll;
+  delta_t_prev_roll = delta_t;
   
+  if (ahrs.getOrientation(&orientation)) {
+    /* 'orientation' should have valid .roll and .pitch fields */
+    roll_sensor_temp = orientation.roll;
+  }
+
+  sensors_event_t a, m, g, temp1;
+  lsm.getEvent(&a, &m, &g, &temp1); 
+  
+  float filter = .98*(roll_sensor_temp + g.gyro.x*delta_t) + .02*(a.acceleration.x);
+  float error_temp = (roll_sensor - values.roll)*filter;
+  
+  for(int i = 0; i != 13; i++) {
+    roll_error[i+1] = roll_error[i];
+  }
+  
+  roll_error[0] = roll_sensor - values.roll;
+  int temp = 0;
+  for (int i = 0; i != 14; i++) {
+    temp += roll_error[0];
+  }
+  temp = temp/15; //normalize
+
+  float delta_e = temp - error_temp;
+
+  if (temp < 1 && temp > -1) 
+    temp = 0;
+
+  if(temp > 255/2)
+    temp = 225/2;
+  if(temp < -255/2)
+    temp = -255/2;
+
+  first = k_p * (0 - error_temp);
+  
+  second = k_i * (0 - temp);
+
+  third = k_d * (0 - delta_e); 
+  
+  return (first + second + third); 
 }
 
-int pitch_calculation() {
+
+float pitch_calculation() {
+  float pitch_sensor_temp;
+  float first, second, third, total;
+
+  unsigned long delta_t = millis() - delta_t_prev_pitch;
+  delta_t_prev_pitch = delta_t;
   
+  if (ahrs.getOrientation(&orientation)) {
+    /* 'orientation' should have valid .roll and .pitch fields */
+    pitch_sensor_temp = orientation.pitch;
+  }
+
+  sensors_event_t a, m, g, temp1;
+  lsm.getEvent(&a, &m, &g, &temp1); 
+  
+  float filter = .98*(pitch_sensor_temp + g.gyro.x*delta_t) + .02*(a.acceleration.x);
+  float error_temp = (pitch_sensor - values.pitch)*filter;
+  
+  for(int i = 0; i != 13; i++) {
+    pitch_error[i+1] = pitch_error[i];
+  }
+  
+  pitch_error[0] = pitch_sensor - values.pitch;
+  int temp = 0;
+  for (int i = 0; i != 14; i++) {
+    temp += pitch_error[0];
+  }
+  temp = temp/15; //normalize
+
+  float delta_e = temp - error_temp;
+  
+  if (temp < 1 && temp > -1) 
+    temp = 0; 
+
+  if(temp > 255/2)
+    temp = 225/2;
+  if(temp < -255/2)
+    temp = -255/2;
+
+  first = k_p * (0 - error_temp);
+  
+  second = k_i * (0 - temp);
+
+  third = k_d * (0 - delta_e); 
+  
+  return (first + second + third); 
 }
 
-int yaw_calculation() {
+float yaw_calculation() {
+  float yaw_sensor_temp;
+  float first, second, third, total;
+
+  unsigned long delta_t = millis() - delta_t_prev_yaw;
+  delta_t_prev_yaw = delta_t;
   
+  if (ahrs.getOrientation(&orientation)) {
+    /* 'orientation' should have valid .roll and .pitch fields */
+    yaw_sensor_temp = orientation.heading;
+  }
+
+  sensors_event_t a, m, g, temp1;
+  lsm.getEvent(&a, &m, &g, &temp1); 
+  
+  float filter = .98*(yaw_sensor_temp + g.gyro.x*delta_t) + .02*(a.acceleration.x);
+  float error_temp = (yaw_sensor - values.yaw)*filter;
+  
+  for(int i = 0; i != 13; i++) {
+    yaw_error[i+1] = yaw_error[i];
+  }
+  
+  yaw_error[0] = yaw_sensor - values.yaw;
+  int temp = 0;
+  for (int i = 0; i != 14; i++) {
+    temp += yaw_error[0];
+  }
+  temp = temp/15; //normalize
+
+  float delta_e = temp - error_temp;
+  
+  if (temp < 1 && temp > -1) 
+    temp = 0;
+  
+  if(temp > 255/2)
+    temp = 225/2;
+  if(temp < -255/2)
+    temp = -255/2;
+
+  first = k_p * (0 - error_temp);
+  
+  second = k_i * (0 - temp);
+
+  third = k_d * (0 - delta_e); 
+  
+  return (first + second + third); 
+}
+
+void set_values() {
+  analogWrite(MA, motor_a);
+  analogWrite(MB, motor_b);
+  analogWrite(MC, motor_c);
+  analogWrite(MD, motor_d);
+}
+
+void graphing() {
+  Serial.print(roll_PID);
+  Serial.print(pitch_PID);
+  Serial.print(yaw_PID);
 }
 
 void lmu_display_values() { 
@@ -116,37 +309,3 @@ void lmu_display_values() {
   Serial.println();
   delay(200);
 }
-
-
-void read_values() {
-  rfRead((uint8_t*) (&values), sizeof(struct send_values));
-}
-
-void set_values() {
-  analogWrite(8, values.throttle);
-  analogWrite(3, values.throttle);
-  analogWrite(4, values.throttle);
-  analogWrite(5, values.throttle);
-}
-
-void setupSensor()
-{
-  lsm.begin();
-  delay(250);
-  // Try to initialise and warn if we couldn't detect the chip
-  if (!lsm.begin())
-  {
-    Serial.println("Oops ... unable to initialize the LSM9DS1. Check your wiring!");
-    while (1);
-  }
-  
-  // 1.) Set the accelerometer range
-  lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_2G);
-
-  // 2.) Set the magnetometer sensitivity
-  lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
-
-  // 3.) Setup the gyroscope
-  lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_245DPS);
-}
-
