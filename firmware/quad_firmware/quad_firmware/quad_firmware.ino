@@ -79,8 +79,8 @@ void loop() {
   read_values();
   read_rpy_sensors();
   PID();
-  set_values();
   graphing();
+  set_values();
   //lmu_display_values(); //used for debugging purposes
 }
 
@@ -127,6 +127,13 @@ void PID() {
   motor_b = values.throttle + pitch_PID + yaw_PID;
   motor_c = values.throttle - roll_PID - yaw_PID;
   motor_d = values.throttle - pitch_PID + yaw_PID;
+
+  if(values.throttle == 0) {
+    motor_a = 0;
+    motor_b = 0;
+    motor_c = 0;
+    motor_d = 0;
+  }
 }
 
 float roll_calculation() {
@@ -159,10 +166,7 @@ float roll_calculation() {
   temp = temp/15; //normalize
 
   float delta_e = temp - error_temp;
-
-  if (temp < 1 && temp > -1) 
-    temp = 0;
-
+  
   if(temp > 255/2)
     temp = 225/2;
   if(temp < -255/2)
@@ -208,9 +212,6 @@ float pitch_calculation() {
   temp = temp/15; //normalize
 
   float delta_e = temp - error_temp;
-  
-  if (temp < 1 && temp > -1) 
-    temp = 0; 
 
   if(temp > 255/2)
     temp = 225/2;
@@ -257,9 +258,6 @@ float yaw_calculation() {
 
   float delta_e = temp - error_temp;
   
-  if (temp < 1 && temp > -1) 
-    temp = 0;
-  
   if(temp > 255/2)
     temp = 225/2;
   if(temp < -255/2)
@@ -283,8 +281,11 @@ void set_values() {
 
 void graphing() {
   Serial.print(roll_PID);
+  Serial.print(" ");
   Serial.print(pitch_PID);
+  Serial.print(" ");
   Serial.print(yaw_PID);
+  
 }
 
 void lmu_display_values() { 
