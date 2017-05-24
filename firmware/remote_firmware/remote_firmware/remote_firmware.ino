@@ -9,7 +9,7 @@ serLCD lcd;
 
 //Global Variables declarations
 struct send_values {
-  int magic;
+  int magic = 73;
   int yaw;
   int throttle;
   int roll;
@@ -19,9 +19,9 @@ struct send_values {
   int bt1;
   int bt2;
 } values;
-int screen_choice;
 int prev_button_one = 0;
 int prev_button_two = 0;
+
 
 void setup() {
   pinMode(PIN_YAW, INPUT); //Yaw
@@ -31,15 +31,15 @@ void setup() {
   pinMode(PIN_LED_RED, OUTPUT);
   pinMode(PIN_LED_BLUE, OUTPUT);
   pinMode(PIN_LED_GRN, OUTPUT);
-  pinMode(PIN_BTN1, INPUT); //blue
-  pinMode(PIN_BTN2, INPUT); //green
+  pinMode(PIN_BTN1, INPUT_PULLUP); //blue
+  pinMode(PIN_BTN2, INPUT_PULLUP); //green
   pinMode(PIN_POT1, INPUT); // left
   pinMode(PIN_POT2, INPUT); // right
   Serial.begin(115200);
   rfBegin(13);
   
   while(!Serial);
-  values.magic = 0;
+ 
   initiate(); //toggels so copter doesnt start on startup
 }
 
@@ -140,12 +140,10 @@ void initiate() {
 }
 
 void read_values() {
-  int temp;
+  int temp, temp_check;
   
   //read Throttle
   temp = analogRead(PIN_THROTTLE);
-  Serial.print("Throttle: ");
-  Serial.print(temp);
   if (temp <= 119) { //bottom 
     temp = 119;
   }
@@ -166,8 +164,6 @@ void read_values() {
 
   //read YAW
   temp = analogRead(PIN_YAW);
-  Serial.print("Pitch: ");
-  Serial.println(temp);
   if (temp <= 120) { //right 
     temp = 120;
   }
@@ -206,34 +202,36 @@ void read_values() {
   }
   values.pot2 = map(temp, 111, 816, 0, 10);
 
-  temp = digitalRead(PIN_BTN1);
-  if (temp != prev_button_one) {
-    if(prev_button_one) {
-      prev_button_one = 0;
+  temp = !digitalRead(PIN_BTN1);
+  delay(25); //debouncing 
+  temp_check = !digitalRead(PIN_BTN1);
+  if (temp == temp_check) {
+    if (temp != prev_button_one) {
+      prev_button_one = temp;
+      if (temp == 1 && values.bt1 == 0) {
+        values.bt1 = 1;
+      }
+      else if (temp == 1 && values.bt1 == 1) {
+        values.bt1 = 0;
+      }
     }
-    else {
-      prev_button_one = 1;
-    }
-    values.pot1 = prev_button_one;
   }
   
-  temp = digitalRead(PIN_BTN2);
-  if (temp != prev_button_two) {
-    if(prev_button_two) {
-      prev_button_two = 0;
+  temp = !digitalRead(PIN_BTN2);
+  delay(25); //debouncing 
+  temp_check = !digitalRead(PIN_BTN2);
+  if (temp == temp_check) {
+    if (temp != prev_button_two) {
+      prev_button_two = temp;
+      if (temp == 1 && values.bt2 == 0) {
+        values.bt2 = 1;
+      }
+      else if (temp == 1 && values.bt2 == 1) {
+        values.bt2 = 0;
+      }
     }
-    else {
-      prev_button_two = 1;
-    }
-    values.pot2 = prev_button_two;
   }
 
-  if(values.pot1) {
-    screen_choice = 2;
-  }
-  else {
-    screen_choice = 1;
-  }
 }
 
 void send_values() {
@@ -241,34 +239,47 @@ void send_values() {
 }
 
 void print_lcd() {
-  screen_choice = 2;
-  if (screen_choice == 1) { // gimble values
+  Serial.print(values.bt1);
+  if (!values.bt1) { // gimble values == 0
     lcd.setCursor(0,0);
     lcd.print("T:");
     lcd.setCursor(0,2);
     lcd.print(values.throttle);
-    lcd.setCursor(0,10);
+    lcd.setCursor(0,11);
     lcd.print("R:");
-    lcd.setCursor(0,12);
+    lcd.setCursor(0,13);
     lcd.print(values.roll);
     lcd.setCursor(1,0);
     lcd.print("Y:");
     lcd.setCursor(1,2);
     lcd.print(values.yaw);
-    lcd.setCursor(1,10);
+    lcd.setCursor(1,11);
     lcd.print("P:");
-    lcd.setCursor(1,12);
+    lcd.setCursor(1,13);
     lcd.print(values.pitch);
   } 
-  if (screen_choice == 2) { // pot and led values
-    lcd.setCursor(0,5);
+  if (values.bt1) { // pot and button values == 1
+    lcd.setCursor(0,0);
     lcd.print("POT 1:");
-    lcd.setCursor(0,11);
+    lcd.setCursor(0,6);
     lcd.print(values.pot1);
-    lcd.setCursor(1,5);
+    lcd.setCursor(1,0);
     lcd.print("POT 2:");
-    lcd.setCursor(1,11);
+    lcd.setCursor(1,6);
     lcd.print(values.pot2);  
+
+    if (values.bt2) {
+      lcd.setCursor(0,13);
+      lcd.print("k_i");
+      lcd.setCursor(1,13);
+      lcd.print("k_d");
+    }
+    else {
+      lcd.setCursor(0,13);
+      lcd.print("k_i");
+      lcd.setCursor(1,13);
+      lcd.print("k_p");
+    }
   }
   delay(300);
   lcd.clear();

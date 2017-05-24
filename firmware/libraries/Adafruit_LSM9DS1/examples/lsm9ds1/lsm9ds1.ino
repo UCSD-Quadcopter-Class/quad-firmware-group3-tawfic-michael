@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <SPI.h>
+#include <radio.h>
 #include <Adafruit_LSM9DS1.h>
 #include <Adafruit_Sensor.h>  // not used in this demo but required!
 
@@ -16,6 +17,19 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 // Or hardware SPI! In this case, only CS pins are passed in
 //Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1(LSM9DS1_XGCS, LSM9DS1_MCS);
 
+
+
+volatile struct send_values {
+  int magic;
+  int yaw;
+  int throttle;
+  int roll;
+  int pitch;
+  int pot1;
+  int pot2;
+  int bt1;
+  int bt2;
+} values;
 
 void setupSensor()
 {
@@ -40,8 +54,13 @@ void setupSensor()
 
 void setup() 
 {
-  Serial.begin(115200);
+  pinMode(8, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(3, OUTPUT);
 
+  Serial.begin(115200);
+  rfBegin(13);
   while (!Serial) {
     delay(1); // will pause Zero, Leonardo, etc until serial console opens
   }
@@ -62,6 +81,7 @@ void setup()
 
 void loop() 
 {
+  rfRead((uint8_t*) (&values), sizeof(struct send_values));
   lsm.read();  /* ask it to read in the data */ 
 
   /* Get a new sensor event */ 
@@ -83,4 +103,9 @@ void loop()
 
   Serial.println();
   delay(200);
+  Serial.print
+  analogWrite(8, values.throttle);
+  analogWrite(5, values.throttle);
+  analogWrite(4, values.throttle);
+  analogWrite(3, values.throttle);
 }
