@@ -54,6 +54,8 @@ volatile float k_i;
 volatile unsigned long delta_t_prev_roll, delta_t_prev_pitch, delta_t_prev_yaw = 0;
 volatile float previous_error_roll, previous_error_pitch, previous_error_yaw;
 
+volatile float filter_roll, filter_pitch, filter_yaw = 0;
+
 
 
 //functions
@@ -154,33 +156,29 @@ float roll_calculation() {
     /* 'orientation' should have valid .roll and .pitch fields */
     roll_sensor_temp = orientation.roll;
   }
-  
-  if(roll_sensor_temp < -40)
-    roll_sensor_temp = -40;
-  if(roll_sensor_temp > 38)
-    roll_sensor_temp = 38;
-
-  roll_sensor_temp = map(roll_sensor_temp, 38, -40, 0, 255);
-  
+  if(roll_sensor_temp > 36) 
+    roll_sensor_temp = 36;
+  if(roll_sensor_temp < -35)
+    roll_sensor_temp = -35;
+    
+  //pitch_sensor_temp = map(pitch_sensor_temp, -35, 36, 0, 255);
   sensors_event_t a, m, g, temp1;
   lsm.read();
   lsm.getEvent(&a, &m, &g, &temp1); 
+//  float gyro_value = gyro_value + g.gyro.y*delta_t*.001;
+//  float filter_new = .02*(gyro_value) + .98*(pitch_sensor_temp);
+  filter_roll = .9*(filter_roll + g.gyro.x*delta_t*.001) + .1*(roll_sensor_temp);
 
-  //float filter = .98*(roll_sensor_temp + g.gyro.x*delta_t) + .02*(a.acceleration.x);
-
-  float filter = .98*(filter + g.gyro.x*delta_t) + .02*(roll_sensor_temp);
-  
-  for(int i = 0; i !=  28; i++) {
+  for(int i = 0; i !=  5; i++) {
     roll_error[i+1] = roll_error[i];
   }
   
-  roll_error[0] = roll_sensor_temp - (values.roll) * filter;
+  roll_error[0] = values.roll - (filter_roll + 131);
   int temp = 0;
-  for (int i = 0; i !=  29; i++) {
+  for (int i = 0; i !=  5; i++) {
     temp += roll_error[i];
   }
-  
-  temp = temp/30; //normalize
+  temp = temp/2; //normalize
   
   if(temp > 255)
     temp = 225/2;
@@ -188,28 +186,30 @@ float roll_calculation() {
     temp = -255/2;
 
   float delta_e = roll_error[0] - roll_error[1];
-//  if(DEBUGGING) {
-//////    Serial.print(" Roll Error Sum: ");
-//////    Serial.print(temp);
-//////    Serial.print(" Detla_e (roll): ");
-//////    Serial.print(delta_e);
-////      Serial.print(" Filter: ");
-////      Serial.println(filter);
-////      Serial.print("Gyro X: "); Serial.print(g.gyro.x);   Serial.print(" dps");
-////      Serial.print("\tY: "); Serial.print(g.gyro.y);      Serial.print(" dps");
-////      Serial.print("\tZ: "); Serial.print(g.gyro.z);      Serial.println(" dps");
-////
-////       Serial.print("Accel X: "); Serial.print(a.acceleration.x); Serial.print(" m/s^2");
-////       Serial.print("\tY: "); Serial.print(a.acceleration.y);     Serial.print(" m/s^2 ");
-////       Serial.print("\tZ: "); Serial.print(a.acceleration.z);     Serial.println(" m/s^2 ");
-////      
-//  }
+  if(DEBUGGING) {
+//    Serial.print("Roll Filer: ");
+//    Serial.print(filter);
+////    Serial.print("Second Term: ");
+//    Serial.print(" ");
+//    Serial.print(filter_pitch);
+//    Serial.print(" Pitch Error Sum: ");
+//    Serial.print(temp);
+//    Serial.print(" Detla_e (Pitch): ");
+//    Serial.print(delta_e);
+//    Serial.print(" Current Error: ");
+//    Serial.print(pitch_error[0]);
+//    Serial.print(" K_p: ");
+//    Serial.print(k_p);
+//    Serial.print(" K_i: ");
+//    Serial.print(k_i);
+//    Serial.print(" K_d: ");
+//    Serial.print(k_d);
+  }
+  first = k_p * (roll_error[0]);
   
-  first = k_p * (123 - roll_error[0]);
-  
-  second = k_i * (123 - temp);
+  second = k_i * (temp);
 
-  third = k_d * (123 - (delta_e/delta_t)); 
+  third = k_d * (delta_e/delta_t); 
   
   return (first + second + third); 
 }
@@ -235,14 +235,16 @@ float pitch_calculation() {
   sensors_event_t a, m, g, temp1;
   lsm.read();
   lsm.getEvent(&a, &m, &g, &temp1); 
-  
-  float filter = .02*(filter + g.gyro.y*delta_t*.001) + .98*(pitch_sensor_temp);
+//  float gyro_value = gyro_value + g.gyro.y*delta_t*.001;
+//  float filter_new = .02*(gyro_value) + .98*(pitch_sensor_temp);
+  filter_pitch = .9*(filter_pitch + g.gyro.y*delta_t*.001) + .1*(pitch_sensor_temp);
+//  filter_pitch = 1.666(pitch_sensor_temp + pitch_sensor_temp_old
 
   for(int i = 0; i !=  5; i++) {
     pitch_error[i+1] = pitch_error[i];
   }
   
-  pitch_error[0] = (filter + 131) - (values.pitch);
+  pitch_error[0] = values.pitch - (filter_pitch + 131);
   int temp = 0;
   for (int i = 0; i !=  5; i++) {
     temp += pitch_error[i];
@@ -256,6 +258,11 @@ float pitch_calculation() {
 
   float delta_e = pitch_error[0] - pitch_error[1];
   if(DEBUGGING) {
+    Serial.print("Pitch Filer: ");
+//    Serial.print(filter);
+////    Serial.print("Second Term: ");
+//    Serial.print(" ");
+    Serial.print(filter_pitch);
     Serial.print(" Pitch Error Sum: ");
     Serial.print(temp);
     Serial.print(" Detla_e (Pitch): ");
