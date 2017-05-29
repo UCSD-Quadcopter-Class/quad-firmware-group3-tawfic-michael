@@ -1,9 +1,9 @@
 // USB Port: A904MI6A
 #include <Wire.h>
-#include <radio.h>
-#include <Adafruit_LSM9DS1.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_Simple_AHRS.h>
+#include "radio.h"
+#include "Adafruit_LSM9DS1.h"
+#include "Adafruit_Sensor.h"
+#include "Adafruit_Simple_AHRS.h"
 
 //Global Object declarations
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
@@ -55,6 +55,13 @@ volatile unsigned long delta_t_prev_roll, delta_t_prev_pitch, delta_t_prev_yaw =
 volatile float previous_error_roll, previous_error_pitch, previous_error_yaw;
 
 volatile float filter_roll, filter_pitch, filter_yaw = 0;
+
+// values for testing comp filter
+volatile float filter_test[] = {0.0, 0.0};
+volatile float acc_test[] = {0.0, 0.0};
+volatile float gyro_test[] = {0.0, 0.0};
+
+// Note to self: we are plsying with pitch when we use the test stand
 
 
 
@@ -218,9 +225,9 @@ float pitch_calculation() {
   float pitch_sensor_temp;
   float first, second, third, total;
 
-  unsigned long time_varialbe = millis();
-  unsigned long delta_t = time_varialbe - delta_t_prev_pitch;
-  delta_t_prev_pitch = time_varialbe;
+  unsigned long time_variable = millis();
+  unsigned long delta_t = time_variable - delta_t_prev_pitch;
+  delta_t_prev_pitch = time_variable;
   
   if (ahrs.getOrientation(&orientation)) {
     /* 'orientation' should have valid .roll and .pitch fields */
@@ -237,8 +244,11 @@ float pitch_calculation() {
   lsm.getEvent(&a, &m, &g, &temp1); 
 //  float gyro_value = gyro_value + g.gyro.y*delta_t*.001;
 //  float filter_new = .02*(gyro_value) + .98*(pitch_sensor_temp);
-  filter_pitch = .9*(filter_pitch + g.gyro.y*delta_t*.001) + .1*(pitch_sensor_temp);
+  //filter_pitch = .9*(filter_pitch + g.gyro.y*delta_t*.001) + .1*(pitch_sensor_temp);
 //  filter_pitch = 1.666(pitch_sensor_temp + pitch_sensor_temp_old
+  filter_test[0] = 1.666*( acc_test[1] - acc_test[0] ) + 0.666*( gyro_test[1] -
+  gyro_test[0] ) - (filter_test[1]/0.428);
+  filter_pitch = filter_test[0];
 
   for(int i = 0; i !=  5; i++) {
     pitch_error[i+1] = pitch_error[i];
