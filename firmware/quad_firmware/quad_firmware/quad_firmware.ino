@@ -63,7 +63,7 @@ volatile float roll_acc[2], pitch_acc[2] = {0.0, 0.0};
 volatile float roll_gyro[2], pitch_gyro[2] = {0.0, 0.0};
 volatile float roll_high_pass[2], pitch_high_pass[2] = {0.0, 0.0};
 volatile float roll_low_pass[2], pitch_low_pass[2] = {0.0, 0.0};
-volatile float filter_out = 0.0;
+volatile float pitch_filter_out, roll_filter_out, yaw_filter_out = 0.0;
 
 volatile float gyro_offset[] = {0, 0, 0};
 sensors_event_t a, m, g, temp1;
@@ -177,15 +177,15 @@ void PID() {
 
 
   if(DEBUGGING) {
-//     Serial.print("MA: ");
-//     Serial.print(motor_a);
-//     Serial.print(" MB: ");
-//     Serial.print(motor_b);
-//     Serial.print(" MC: ");
-//     Serial.print(motor_c);
-//     Serial.print(" MD: ");
-//     Serial.print(motor_d);
-//     Serial.print("  \n");
+     Serial.print("MA: ");
+     Serial.print(motor_a);
+     Serial.print(" MB: ");
+     Serial.print(motor_b);
+     Serial.print(" MC: ");
+     Serial.print(motor_c);
+     Serial.print(" MD: ");
+     Serial.print(motor_d);
+     Serial.print("  \n");
   }
   
   if(values.throttle == 0) {
@@ -232,7 +232,7 @@ float roll_calculation() {
   roll_low_pass[0] = 0.9615*roll_acc[0] + 0.9615*roll_acc[1] - 0.9231*roll_low_pass[1];
   roll_high_pass[0] = 0.03846*roll_gyro[0] - 0.03846*roll_gyro[1] - 0.9231*roll_high_pass[1];
 
-  filter_out = roll_high_pass[0] + roll_low_pass[0];
+  roll_filter_out = roll_high_pass[0] + roll_low_pass[0];
   
 
   // move values back in arrays
@@ -245,7 +245,7 @@ float roll_calculation() {
   }
 
   // calculate errors
-  roll_error[0] = values.roll - (filter_out + 131);
+  roll_error[0] = values.roll - (roll_filter_out + 131);
 //  Serial.println(values.roll);
 //  Serial.println( roll_error[0]);
   roll_i_error = (roll_i_error/2) + roll_error[0];
@@ -263,7 +263,7 @@ float roll_calculation() {
 //    Serial.print("\t");      
 //    Serial.print(high_pass[0]);  
 //    Serial.print("\t ");      
-//    Serial.print(filter_out);   
+//    Serial.print(roll_filter_out);   
 //    Serial.print(" \t ");      
 //    Serial.print(gyro[1]);   
 //    Serial.print(" \t ");      
@@ -378,9 +378,12 @@ float pitch_calculation() {
   pitch_low_pass[0] = 0.04762*pitch_acc[0] + 0.04762*pitch_acc[1] + 0.9048*pitch_low_pass[1];
   pitch_high_pass[0] = 0.9524*pitch_gyro[0] - 0.9524*pitch_gyro[1] + 0.9048*pitch_high_pass[1];
 
-  filter_out = pitch_high_pass[0] + pitch_low_pass[0];
-  Serial.println( filter_out );
+//  // filters with x-over at 0.5 Hz.
+//  pitch_low_pass[0] = 0.01235*pitch_acc[0] + 0.01235*pitch_acc[1] + 0.9753*pitch_low_pass[1];
+//  pitch_high_pass[0] = 0.9877*pitch_gyro[0] - 0.9877*pitch_gyro[1] + 0.9753*pitch_high_pass[1];
 
+  pitch_filter_out = pitch_high_pass[0] + pitch_low_pass[0];
+  float pitch = pitch_filter_out;
 
   // move values back in arrays
   pitch_acc[1] = pitch_acc[0];
@@ -392,7 +395,7 @@ float pitch_calculation() {
   }
 
   // calculate errors
-  pitch_error[0] = values.pitch - (filter_out + 131);
+//  pitch_error[0] = values.pitch - (pitch_filter_out + 131);
 //  Serial.println(values.pitch);
 //  Serial.println( pitch_error[0]);
   pitch_i_error = (pitch_i_error/2) + pitch_error[0];
@@ -411,11 +414,12 @@ float pitch_calculation() {
 //    Serial.print("\t");      
 //    Serial.print(pitch_high_pass[0]);  
 //    Serial.print("\t ");      
-//    Serial.print(filter_out);   
+//    Serial.print( pitch );
 //    Serial.print(" \t ");      
 //    Serial.print(pitch_gyro[1]);   
 //    Serial.print(" \t ");      
-//    Serial.println(pitch_acc[1]);
+//    Serial.print(pitch_acc[1]);
+//    Serial.println();
   }
 //  first = k_p * (pitch_error[0]);
 //  
