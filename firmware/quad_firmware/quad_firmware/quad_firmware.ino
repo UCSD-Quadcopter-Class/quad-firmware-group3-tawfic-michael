@@ -159,15 +159,15 @@ void PID() {
 
   
   
-  motor_a = values.throttle + pitch_PID;// - yaw_PID;
+  motor_a = values.throttle - pitch_PID/3;// - yaw_PID;
  
-  motor_b = values.throttle - pitch_PID; //+ roll_PID + yaw_PID;
+  motor_b = values.throttle + pitch_PID/3; //+ roll_PID + yaw_PID;
  
-  motor_c = values.throttle - pitch_PID;// - yaw_PID;
+  motor_c = values.throttle + pitch_PID/3;// - yaw_PID;
  
-  motor_d = values.throttle + pitch_PID;//roll_PID + yaw_PID;
+  motor_d = values.throttle - pitch_PID/3;//roll_PID + yaw_PID;
   
-//  motor_a = values.throttle + pitch_PID;
+//  motor_a = values.throttle + pitch_PID/2;
 // 
 //  motor_b = values.throttle;
 // 
@@ -175,6 +175,35 @@ void PID() {
 // 
 //  motor_d = values.throttle + pitch_PID;
 
+  
+  if(values.throttle == 0) {
+    motor_a = 0;
+    motor_b = 0;
+    motor_c = 0;
+    motor_d = 0;
+  }
+
+  if( exceeds( motor_a, motor_b, motor_c, motor_d, 255) ) {
+    int highVal = absMax( motor_a, motor_b, motor_c, motor_b);
+    motor_a = (int) ((float) motor_a/highVal * 255);
+    motor_b = (int) ((float) motor_b/highVal * 255);
+    motor_c = (int) ((float) motor_c/highVal * 255);
+    motor_d = (int) ((float) motor_d/highVal * 255);
+  }
+//  if( motor_a > 255) {
+//    motor_a = 255;
+//  }
+//  if( motor_b > 255) {
+//    motor_b = 255;
+//  }
+//  if( motor_c > 255) {
+//    motor_c = 255;
+//  }
+//  if( motor_d > 255) {
+//    motor_d = 255;
+//  }
+
+  
 
   if(DEBUGGING) {
      Serial.print("MA: ");
@@ -188,12 +217,6 @@ void PID() {
      Serial.print("  \n");
   }
   
-  if(values.throttle == 0) {
-    motor_a = 0;
-    motor_b = 0;
-    motor_c = 0;
-    motor_d = 0;
-  }
 }
 
 float roll_calculation() {
@@ -248,7 +271,7 @@ float roll_calculation() {
   roll_error[0] = values.roll - (roll_filter_out + 131);
 //  Serial.println(values.roll);
 //  Serial.println( roll_error[0]);
-  roll_i_error = (roll_i_error/2) + roll_error[0];
+  roll_i_error = (roll_i_error/1.5) + roll_error[0];
 
   delta_e = roll_error[0] - roll_error[1];
   if(DEBUGGING) {
@@ -370,13 +393,13 @@ float pitch_calculation() {
 //  pitch_low_pass[0] = 0.3333*pitch_acc[0] + 0.3333*pitch_acc[1] + 0.3333*pitch_low_pass[1];
 //  pitch_high_pass[0] = 0.6667*pitch_gyro[0] - 0.6667*pitch_gyro[1] + 0.3333*pitch_high_pass[1];
 
-//  // filters with x-over at 10 Hz.
-//  pitch_low_pass[0] = 0.2*pitch_acc[0] + 0.2*pitch_acc[1] + 0.6*pitch_low_pass[1];
-//  pitch_high_pass[0] = 0.8*pitch_gyro[0] - 0.8*pitch_gyro[1] + 0.6*pitch_high_pass[1];
+  // filters with x-over at 10 Hz.
+  pitch_low_pass[0] = 0.2*pitch_acc[0] + 0.2*pitch_acc[1] + 0.6*pitch_low_pass[1];
+  pitch_high_pass[0] = 0.8*pitch_gyro[0] - 0.8*pitch_gyro[1] + 0.6*pitch_high_pass[1];
 
-  // filters with x-over at 2 Hz.
-  pitch_low_pass[0] = 0.04762*pitch_acc[0] + 0.04762*pitch_acc[1] + 0.9048*pitch_low_pass[1];
-  pitch_high_pass[0] = 0.9524*pitch_gyro[0] - 0.9524*pitch_gyro[1] + 0.9048*pitch_high_pass[1];
+//  // filters with x-over at 2 Hz.
+//  pitch_low_pass[0] = 0.04762*pitch_acc[0] + 0.04762*pitch_acc[1] + 0.9048*pitch_low_pass[1];
+//  pitch_high_pass[0] = 0.9524*pitch_gyro[0] - 0.9524*pitch_gyro[1] + 0.9048*pitch_high_pass[1];
 
 //  // filters with x-over at 0.5 Hz.
 //  pitch_low_pass[0] = 0.01235*pitch_acc[0] + 0.01235*pitch_acc[1] + 0.9753*pitch_low_pass[1];
@@ -396,9 +419,10 @@ float pitch_calculation() {
 
   // calculate errors
 //  pitch_error[0] = values.pitch - (pitch_filter_out + 131);
+  pitch_error[0] = values.pitch - (pitch + 131);
 //  Serial.println(values.pitch);
 //  Serial.println( pitch_error[0]);
-  pitch_i_error = (pitch_i_error/2) + pitch_error[0];
+  pitch_i_error = (pitch_i_error/1.5) + pitch_error[0];
 
   delta_e = pitch_error[0] - pitch_error[1];
   if(DEBUGGING) {
@@ -421,17 +445,17 @@ float pitch_calculation() {
 //    Serial.print(pitch_acc[1]);
 //    Serial.println();
   }
-//  first = k_p * (pitch_error[0]);
-//  
-//  second = k_i * (i_error);
-//
-//  third = k_d * (delta_e/delta_t); 
-
-  first = 2 * (pitch_error[0]);
+  first = 0.75 * k_p * (pitch_error[0]);
   
-  second = 0 * (pitch_i_error);
+  second = 0.2 * k_i * (pitch_i_error);
 
-  third = 0 * (delta_e/delta_t); 
+  third = 0.2 * k_d * (delta_e/delta_t); 
+
+//  first = 0.5 * (pitch_error[0]);
+//  
+//  second = 0.1 * (pitch_i_error);
+//
+//  third = 0 * (delta_e/delta_t); 
 
 //  Serial.print(" pitch_error: ");
 //  Serial.print(first);
@@ -457,14 +481,14 @@ void set_values() {
   analogWrite(MC, motor_c);
   analogWrite(MD, motor_d);
   
-//  if (values.bt2 == 1) {
-//    k_i = values.pot1;
-//    k_d = values.pot2;
-//  }
-//  else {
-//    k_i = values.pot1;
-//    k_p = values.pot2;
-//  }
+  if (values.bt2 == 1) {
+    k_i = 0.2*values.pot1;
+    k_d = 0.2*values.pot2;
+  }
+  else {
+    k_i = 0.2*values.pot1;
+    k_p = values.pot2;
+  }
 }
 
 void graphing() {
@@ -544,3 +568,15 @@ void calibrate_gyro( float * gyro_offset, sensors_event_t g, float percent, int 
   return;
 }
 
+int exceeds( int a, int b, int c, int d, int limit) {
+  if( (a > limit)||(b > limit)||(c > limit)||(d > limit) ) {
+    return 1;
+  }
+  return 0;
+}
+
+int absMax( int a, int b, int c, int d) {
+  a = max(a, b);
+  c = max(c, d);
+  return max(a,c);
+}
