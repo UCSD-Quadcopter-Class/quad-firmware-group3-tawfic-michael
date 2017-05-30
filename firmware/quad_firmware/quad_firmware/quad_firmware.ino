@@ -186,69 +186,108 @@ float roll_calculation() {
   float roll_sensor_temp;
   float first, second, third, total;
 
-  unsigned long time_varialbe = millis();
-  unsigned long delta_t = time_varialbe - delta_t_prev_roll;
-  delta_t_prev_roll = time_varialbe;
+  unsigned long time_variable = millis();
+  unsigned long delta_t = time_variable - delta_t_prev_roll;
+  delta_t_prev_roll = time_variable;
   
   if (ahrs.getOrientation(&orientation)) {
     /* 'orientation' should have valid .roll and .pitch fields */
-    roll_sensor_temp = orientation.roll;
+    acc[0] = orientation.roll;
   }
-  if(roll_sensor_temp > 36) 
-    roll_sensor_temp = 36;
-  if(roll_sensor_temp < -35)
-    roll_sensor_temp = -35;
-    
-  //pitch_sensor_temp = map(pitch_sensor_temp, -35, 36, 0, 255);
-  sensors_event_t a, m, g, temp1;
-  lsm.read();
-  lsm.getEvent(&a, &m, &g, &temp1); 
-//  float gyro_value = gyro_value + g.gyro.y*delta_t*.001;
-//  float filter_new = .02*(gyro_value) + .98*(pitch_sensor_temp);
-  filter_roll = .9*(filter_roll + g.gyro.x*delta_t*.001) + .1*(roll_sensor_temp);
 
+  // read from sensors
+  lsm.read();
+  lsm.getEvent(NULL, NULL, &g, NULL); 
+  
+  // calculate new gyro position
+  gyro[0] = gyro[0] + (g.gyro.y - gyro_offset[1])*delta_t*0.001;
+
+/* All filters use sampling time of 1/2 sec, based on rough timing of our calls */
+//  // filters with x-over at 10 Hz
+//  low_pass[0] = 0.7143*acc[0] + 0.7143*acc[1] - 0.4286*low_pass[1];
+//  high_pass[0] = 0.2857*gyro[0] - 0.2857*gyro[1] - 0.4286*high_pass[1];
+
+//  // filters with x-over at 2 Hz. worse than at 10 hz. try 20 hz
+//  low_pass[0] = 0.3333*acc[0] + 0.3333*acc[1] + 0.3333*low_pass[1];
+//  high_pass[0] = 0.6667*gyro[0] - 0.6667*gyro[1] + 0.3333*high_pass[1];
+
+//  // filters with x-over at 20 Hz. try 100 hz?
+//  low_pass[0] = 0.8333*acc[0] + 0.8333*acc[1] - 0.6667*low_pass[1];
+//  high_pass[0] = 0.1667*gyro[0] - 0.1667*gyro[1] - 0.6667*high_pass[1];
+
+//  // filters with x-over at 100 Hz. 20 hz and this one both work well.
+  low_pass[0] = 0.9615*acc[0] + 0.9615*acc[1] - 0.9231*low_pass[1];
+  high_pass[0] = 0.03846*gyro[0] - 0.03846*gyro[1] - 0.9231*high_pass[1];
+
+  filter_out = high_pass[0] + low_pass[0];
+
+  // move values back in arrays
+  acc[1] = acc[0];
+  gyro[1] = gyro[0];
+  low_pass[1] = low_pass[0];
+  high_pass[1] = high_pass[0];
   for(int i = 0; i !=  5; i++) {
     roll_error[i+1] = roll_error[i];
   }
-  
-  roll_error[0] = values.roll - (filter_roll + 131);
-  int temp = 0;
+
+  // calculate errors
+  roll_error[0] = values.roll - (filter_out + 131);
+//  Serial.println(values.roll);
+//  Serial.println( roll_error[0]);
+  int i_error = 0;
   for (int i = 0; i !=  5; i++) {
-    temp += roll_error[i];
+    i_error += roll_error[i];
   }
-  temp = temp/2; //normalize
-  
-  if(temp > 255)
-    temp = 225/2;
-  if(temp < -255)
-    temp = -255/2;
+  i_error = i_error/2; //normalize
+
+  // I think we should get rid of this for same reason as above
+//  if(temp > 255)
+//    temp = 225;
+//  if(temp < -255)
+//    temp = -255;
 
   float delta_e = roll_error[0] - roll_error[1];
   if(DEBUGGING) {
-//    Serial.print("Roll Filer: ");
-//    Serial.print(filter);
-////    Serial.print("Second Term: ");
-//    Serial.print(" ");
-//    Serial.print(filter_pitch);
-//    Serial.print(" Pitch Error Sum: ");
-//    Serial.print(temp);
-//    Serial.print(" Detla_e (Pitch): ");
-//    Serial.print(delta_e);
-//    Serial.print(" Current Error: ");
-//    Serial.print(pitch_error[0]);
-//    Serial.print(" K_p: ");
-//    Serial.print(k_p);
-//    Serial.print(" K_i: ");
-//    Serial.print(k_i);
-//    Serial.print(" K_d: ");
-//    Serial.print(k_d);
+//    Serial.println(" gyro_reading \t acc_reading ");
+//    Serial.print(gyro[0]);   
+//    Serial.print("\t\t");      
+//    Serial.println(acc[0]);  
+
+//    Serial.println("lp_acc\thp_gyr\tfilter\traw_g\traw_acc");
+//    Serial.print(" ");      
+//    Serial.print(low_pass[0]);   
+//    Serial.print("\t");      
+//    Serial.print(high_pass[0]);  
+//    Serial.print("\t ");      
+//    Serial.print(filter_out);   
+//    Serial.print(" \t ");      
+//    Serial.print(gyro[1]);   
+//    Serial.print(" \t ");      
+//    Serial.println(acc[1]);
   }
   first = k_p * (roll_error[0]);
   
-  second = k_i * (temp);
+  second = k_i * (i_error);
 
   third = k_d * (delta_e/delta_t); 
-  
+
+//  first = 2 * (roll_error[0]);
+//  
+//  second = 0 * (i_error);
+//
+//  third = 0 * (delta_e/delta_t); 
+
+//  Serial.print(" roll_error: ");
+//  Serial.print(first);
+//  Serial.print("  ");
+//  Serial.print(second);
+//  Serial.print("  ");
+//  Serial.print(third);
+//  Serial.print("  ");
+//  Serial.println(first+second+third);
+
+//  Serial.println( roll_error[0]);
+
   return (first + second + third); 
 }
 
@@ -369,50 +408,9 @@ float pitch_calculation() {
   return (first + second + third); 
 }
 
-float yaw_calculation() {
-  float yaw_sensor_temp;
-  float first, second, third, total;
 
-  unsigned long delta_t = millis() - delta_t_prev_yaw;
-  delta_t_prev_yaw = delta_t;
-  
-  if (ahrs.getOrientation(&orientation)) {
-    /* 'orientation' should have valid .roll and .pitch fields */
-    yaw_sensor_temp = orientation.heading;
-  }
+// TODO: put yaw_calculation here
 
-  sensors_event_t a, m, g, temp1;
-  lsm.read();
-  lsm.getEvent(&a, &m, &g, &temp1); 
-  
-  float filter = .98*(yaw_sensor_temp + g.gyro.x*delta_t) + .02*(a.acceleration.x);
-  
-  for(int i = 0; i !=  28; i++) {
-    yaw_error[i+1] = yaw_error[i];
-  }
-  
-  yaw_error[0] = yaw_sensor_temp - (values.yaw) * filter;
-  int temp = 0;
-  for (int i = 0; i !=  29; i++) {
-    temp += yaw_error[0];
-  }
-  temp = temp/30; //normalize
-  
-  if(temp > 255)
-    temp = 225/2;
-  if(temp < -255)
-    temp = -255/2;
-
-  float delta_e = yaw_error[1] - yaw_error[0];
-
-  first = k_p * (yaw_error[0]);
-  
-  second = k_i * (temp);
-
-  third = k_d * ((delta_e/delta_t)); 
-  
-  return (first + second + third); 
-}
 
 void set_values() {
   analogWrite(MA, motor_a);
